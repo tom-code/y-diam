@@ -12,14 +12,14 @@ mod dconst;
 
 
 
-struct ClientConfigBuilder<'a, H: MessageHandler> {
+struct ClientConfigBuilder<'a> {
     remote_address: &'a str,
     local_identity: &'a str,
     local_realm: &'a str,
-    handler: H
+    handler: Box<dyn MessageHandler + Sync + Send>
 }
-impl<'a, H> ClientConfigBuilder<'a, H> where H: MessageHandler + Sync + Send {
-    fn new(h: H) -> Self {
+impl<'a> ClientConfigBuilder<'a> {
+    fn new(h: Box<dyn MessageHandler + Sync + Send>) -> Self {
         Self {
             remote_address: "127.0.0.1:3868",
             local_identity: "warpanel.bridge.enterprise.com",
@@ -40,7 +40,7 @@ impl<'a, H> ClientConfigBuilder<'a, H> where H: MessageHandler + Sync + Send {
         self.local_realm = local_realm;
         self
     }
-    fn build(self) -> Arc<Client<H>> {
+    fn build(self) -> Arc<Client> {
         Arc::new(Client {
             remote_address: self.remote_address.to_owned(),
             local_identity: self.local_identity.to_owned(),
@@ -52,27 +52,25 @@ impl<'a, H> ClientConfigBuilder<'a, H> where H: MessageHandler + Sync + Send {
 }
 
 
-struct Client<H: MessageHandler + Sync + Send + 'static> {
+struct Client {
     remote_address: String,
     local_identity: String,
     local_realm: String,
     sender: tokio::sync::RwLock<Option<BufferedSender>>,
-    handler: H
+    handler: Box<dyn MessageHandler + Sync + Send>
 }
 
 
 trait MessageHandler {
-    fn set_con(&mut self, c: Arc<Client<Self>>) where Self: Sync+Send+Sized;
-    fn handle(&self, msg: Message) -> impl std::future::Future<Output = ()> + std::marker::Send;
+    fn handle(&self, msg: Message, con: Arc<Client>);
 }
 struct NoopHandler{}
 impl MessageHandler for NoopHandler {
-    fn set_con(&mut self, c: Arc<Client<Self>>) where Self: Sync+Send+Sized{}
-    async fn handle(&self, msg: Message) {
+    fn handle(&self, msg: Message, con: Arc<Client>) {
     }
 }
 
-impl<H> Client<H> where H: MessageHandler + Sync + Send {
+impl Client {
     async fn send_cer(&self, w: &mut (impl tokio::io::AsyncWrite + Unpin)) -> Result<()> {
         let msg = codec::Message {
             flags: codec::MSG_FLAG_REQUEST,
@@ -110,11 +108,11 @@ impl<H> Client<H> where H: MessageHandler + Sync + Send {
         Ok(())
     }
 
-    async fn process_messages<'a, R>(&self, parser: &mut BufferedDiameterParser<'a, R, {1024*100}>)
+    async fn process_messages<'a, R>(self: &Arc<Self>, parser: &mut BufferedDiameterParser<'a, R, {1024*100}>)
            where R : AsyncRead + Unpin {
         while let Ok(m) = parser.parse().await {
             debug!("incoming message: {:?}", m);
-            self.handler.handle(m).await;
+            self.handler.handle(m, self.clone());
             //if m.command == dconst::CMD_DWR {
             //    self.send_dwa(m).await;
            // }
@@ -175,17 +173,13 @@ impl<H> Client<H> where H: MessageHandler + Sync + Send {
 
 struct H1 {
     name: String,
-    connection: Option<Arc<Client<Self>>>
+    connection: Option<Arc<Client>>
 }
 impl MessageHandler for H1 {
-    async fn handle(&self, msg: Message) {
+    fn handle(&self, msg: Message, con: Arc<Client>) {
         println!("1 {}", self.name);
-        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         println!("2 {}", self.name);
 
-    }
-    fn set_con(&mut self, c: Arc<Client<Self>>) where Self: Sync+Send+Sized {
-        self.connection = Some(c)
     }
 }
 fn main() {
@@ -199,10 +193,10 @@ fn main() {
 
     let runtime = tokio::runtime::Runtime::new().unwrap();
     runtime.block_on(async {
-        let mut h = H1{
+        let mut h = Box::new(H1{
             name: "aaa".to_owned(),
             connection: None
-        };
+        });
 
         let c = ClientConfigBuilder::new(h)
             .remote_address("127.0.0.1:3868")
