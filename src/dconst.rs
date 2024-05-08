@@ -12,9 +12,13 @@ pub const AVP_DESTINATION_REALM: u32 = 283;
 pub const AVP_ORIGIN_STATE_ID: u32 = 278;
 pub const AVP_RESULT_CODE: u32 = 268;
 pub const AVP_AUTH_APPLICATION_ID: u32 = 258;
+pub const AVP_ACCT_APPLICATION_ID: u32 = 259;
+pub const AVP_VS_APPLICATION_ID: u32 = 260;
 pub const AVP_REDIRECT_HOST: u32 = 292;
 pub const AVP_PRODUCT_NAME: u32 = 269;
 pub const AVP_PROXY_INFO: u32 = 284;
+pub const AVP_VENDOR_ID: u32 = 266;
+pub const AVP_SUPPORTED_VENDOR_ID: u32 = 265;
 
 pub const AVP_SUBSCRIPTION_ID: u32 = 443;
 pub const AVP_SUBSCRIPTION_ID_DATA: u32 = 444;
