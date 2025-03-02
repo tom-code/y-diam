@@ -1,0 +1,13 @@
+[package]
+name = "y-diameter"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = {version="1.35", features = [ "net", "io-util", "macros", "rt-multi-thread", "time", "sync" ]}
+byteorder = "1.5"
+tokio-util = "0.7"
+log = "0.4"
+env_logger = "0.11"
